@@ -69,6 +69,25 @@ impl Preprocessor for LinkPreprocessor {
     }
 }
 
+lazy_static! {
+    // Matches all leading whitespaces and tabs
+    static ref INDENTATION: Regex = Regex::new(r"^(?P<indentation>[ \t]*)[^ \t]").unwrap();
+}
+
+/// Finds the indentation of the input content, and returns a new String with
+/// the content indented.
+fn indent_content(s: &str) -> String {
+    let indentation = match INDENTATION.captures(s) {
+        Some(cap) => String::from(&cap["indentation"]),
+        None => String::new(),
+    };
+    let mut indented_separator = String::new();
+    indented_separator.push('\n');
+    indented_separator.push_str(&indentation);
+
+    s.lines().collect::<Vec<&str>>().join(&indented_separator)
+}
+
 fn replace_all<P1, P2>(
     s: &str,
     path: P1,
@@ -103,7 +122,7 @@ where
                             chapter_title,
                         ));
                     } else {
-                        replaced.push_str(&new_content);
+                        replaced.push_str(&indent_content(&new_content));
                     }
                 } else {
                     error!(
@@ -931,6 +950,29 @@ mod tests {
                 PathBuf::from("arbitrary"),
                 RangeOrAnchor::Range(LineRange::from(4..10))
             )
+        );
+    }
+
+    #[test]
+    fn test_includes_are_indented() {
+        let s = "    Lorem ipsum dolor sit amet,\n  \
+                           consectetur adipiscing elit,\n    \
+                             sed do eiusmod tempor incididunt\n      \
+                               ut labore et dolore magna aliqua.";
+        assert_eq!(
+            indent_content(s),
+            "    Lorem ipsum dolor sit amet,\n      \
+                   consectetur adipiscing elit,\n        \
+                     sed do eiusmod tempor incididunt\n          \
+                       ut labore et dolore magna aliqua."
+        );
+
+        let s = "    instance Eq (NonEmpty a) where\n  \
+                           eq (NonEmpty x xs) (NonEmpty y ys) = x == y && xs == ys";
+        assert_eq!(
+            indent_content(s),
+            "    instance Eq (NonEmpty a) where\n      \
+                   eq (NonEmpty x xs) (NonEmpty y ys) = x == y && xs == ys"
         );
     }
 }
